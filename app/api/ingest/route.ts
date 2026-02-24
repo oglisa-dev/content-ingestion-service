@@ -27,14 +27,35 @@ export async function POST(request: Request): Promise<NextResponse> {
 	const existingContentRecord = await findContentByURL(normalizedURL);
 
 	if (existingContentRecord) {
-		const existingResponse: IngestResponse = {
-			id: existingContentRecord.id,
-			url: existingContentRecord.url,
-			processingStatus: existingContentRecord.processing_status,
-			message: "URL already ingested. Returning existing record."
+		if (existingContentRecord.processing_status !== "failed") {
+			return NextResponse.json(
+				{
+					error: `Content for this URL already exists with status '${existingContentRecord.processing_status}'.`
+				},
+				{ status: 409 }
+			);
+		}
+
+		const resetRecord = await resetFailedRecordToPending(existingContentRecord.id);
+
+		try {
+			await IngestContentTask.trigger({
+				contentId: resetRecord.id,
+				url: resetRecord.url
+			});
+		} catch (error) {
+			await markIngestionFailed(resetRecord.id, error);
+			return NextResponse.json({ error: "Failed to schedule ingestion task." }, { status: 500 });
+		}
+
+		const retryResponse: IngestResponse = {
+			id: resetRecord.id,
+			url: resetRecord.url,
+			processingStatus: resetRecord.processing_status,
+			message: "Previous failed ingestion was reset and re-triggered."
 		};
 
-		return NextResponse.json(existingResponse, { status: 200 });
+		return NextResponse.json(retryResponse, { status: 202 });
 	}
 
 	const createdContentRecord = await createPendingRecord(normalizedURL);
@@ -124,6 +145,26 @@ async function createPendingRecord(url: string): Promise<ContentRecord> {
 		return data;
 	} catch (error) {
 		console.error("Failed to create pending content record", { url, error });
+		throw error;
+	}
+}
+
+async function resetFailedRecordToPending(contentID: string): Promise<ContentRecord> {
+	try {
+		const { data } = await supabaseAdmin
+			.from("content")
+			.update({
+				processing_status: "pending",
+				processing_error_message: null
+			})
+			.eq("id", contentID)
+			.select("id, url, processing_status")
+			.single()
+			.throwOnError();
+
+		return data;
+	} catch (error) {
+		console.error("Failed to reset failed content record to pending", { contentID, error });
 		throw error;
 	}
 }
