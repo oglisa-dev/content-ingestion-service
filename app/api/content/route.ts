@@ -47,8 +47,7 @@ export async function GET(request: Request): Promise<NextResponse> {
 	} catch (error) {
 		return NextResponse.json(
 			{
-				error:
-					error instanceof Error ? error.message : "Failed to fetch ingested content records."
+				error: error instanceof Error ? error.message : "Failed to fetch ingested content records."
 			},
 			{ status: 500 }
 		);
