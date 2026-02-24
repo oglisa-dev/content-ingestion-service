@@ -25,6 +25,8 @@ Asynchronous content ingestion service for a CMS, built with Next.js App Router,
 5. Parent task writes final result to DB and updates `processing_status`.
 6. Client reads records through `GET /api/content` or via the UI.
 
+<img width="2124" height="923" alt="Screenshot 2026-02-24 at 13 48 50" src="https://github.com/user-attachments/assets/75d4b189-a19f-4be0-a076-371314019c07" />
+
 ### Trigger.dev task structure
 
 - **Parent task**: `ingest-content`
