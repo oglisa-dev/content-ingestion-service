@@ -117,7 +117,9 @@ async function createPendingRecord(url: string): Promise<ContentRecord> {
 			.single()
 			.throwOnError();
 
-		console.info("Content record in state 'pending' created successfully", { data });
+		console.info("Content record in state 'pending' created successfully", {
+			contentID: data.id
+		});
 
 		return data;
 	} catch (error) {
