@@ -10,9 +10,13 @@
 		"format": "prettier --write ."
 	},
 	"dependencies": {
+		"@ai-sdk/openai": "^3.0.31",
+		"@mozilla/readability": "^0.6.0",
 		"@supabase/supabase-js": "^2.97.0",
 		"@trigger.dev/sdk": "4.4.1",
+		"ai": "^6.0.97",
 		"axios": "^1.13.5",
+		"jsdom": "^28.1.0",
 		"next": "16.1.6",
 		"react": "19.2.3",
 		"react-dom": "19.2.3",
@@ -24,9 +28,9 @@
 		"@types/node": "^20",
 		"@types/react": "^19",
 		"@types/react-dom": "^19",
-		"prettier": "^3.8.1",
 		"eslint": "^9",
 		"eslint-config-next": "16.1.6",
+		"prettier": "^3.8.1",
 		"supabase": "^2.76.14",
 		"tailwindcss": "^4",
 		"typescript": "^5"
