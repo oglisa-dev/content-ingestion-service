@@ -1,19 +1,18 @@
-import axios from "axios";
 import * as cherio from "cherio";
-
-import { AXIOS_TIMEOUT_MS, MAX_CONTENT_CHARS } from "@/lib/constants";
 
 const AUTHOR_META_SELECTORS = [
 	'meta[name="author"]',
 	'meta[property="article:author"]',
 	'meta[name="byline"]'
 ] as const;
+
 const PUBLISH_DATE_META_SELECTORS = [
 	'meta[property="article:published_time"]',
 	'meta[name="pubdate"]',
 	'meta[name="publish_date"]',
 	'meta[name="date"]'
 ] as const;
+
 const TITLE_META_SELECTORS = ['meta[property="og:title"]', 'meta[name="twitter:title"]'] as const;
 const CONTENT_ROOT_SELECTORS = ["article", "main", '[role="main"]', ".post-content", ".entry-content"] as const;
 
@@ -85,7 +84,7 @@ function extractBodyTextFromHtml($: cherio.Root): string | null {
 		const joinedParagraphs = normalizeText(paragraphs.join(" "));
 
 		if (joinedParagraphs) {
-			return joinedParagraphs.slice(0, MAX_CONTENT_CHARS);
+			return joinedParagraphs;
 		}
 	}
 
@@ -99,7 +98,7 @@ function extractBodyTextFromHtml($: cherio.Root): string | null {
 		return null;
 	}
 
-	return fallbackText.slice(0, MAX_CONTENT_CHARS);
+	return fallbackText;
 }
 
 function extractMetaContent($: cherio.Root, selectors: readonly string[]): string | null {
