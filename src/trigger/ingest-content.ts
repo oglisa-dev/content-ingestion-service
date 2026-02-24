@@ -91,6 +91,7 @@ export async function updateCompletedContent(
 				category: aiMetadata.category,
 				confidence_score: aiMetadata.confidenceScore,
 				needs_review: aiMetadata.confidenceScore < LOW_CONFIDENCE_THRESHOLD,
+				metadata: aiMetadata.usage,
 				processing_status: "completed",
 				processing_error_message: null
 			})

@@ -39,7 +39,7 @@ export const ClassifyContentTask = task({
 					const prompt = buildContentClassificationPrompt(input);
 
 					logger.info("Sending prompt request to LLM for content classification", { prompt });
-					const { output } = await generateText({
+					const { output, usage } = await generateText({
 						model: google(LLM_MODEL),
 						output: Output.object({
 							schema: ClassifyContentResponseSchema
@@ -49,7 +49,10 @@ export const ClassifyContentTask = task({
 
 					logger.info("Received response from LLM for content classification", { output });
 
-					return output;
+					return {
+						...output,
+						usage
+					};
 				} catch (error) {
 					logger.warn("LLM classification attempt failed", { attempt, error });
 					throw error;

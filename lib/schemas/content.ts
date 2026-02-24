@@ -31,11 +31,7 @@ export const IngestResponseSchema = z.object({
 
 export const ClassifyContentResponseSchema = z.object({
 	category: z.enum(CONTENT_CATEGORY_VALUES),
-	summary: z
-		.string()
-		.trim()
-		.min(40, "Summary is too short.")
-		.max(400, "Summary is too long."),
+	summary: z.string().trim().min(40, "Summary is too short.").max(400, "Summary is too long."),
 	confidenceScore: z.number().min(0).max(1)
 });
 
@@ -54,4 +50,5 @@ export interface ClassifyContentResponse {
 	category: (typeof CONTENT_CATEGORY_VALUES)[number];
 	summary: string;
 	confidenceScore: number;
+	usage: unknown;
 }
