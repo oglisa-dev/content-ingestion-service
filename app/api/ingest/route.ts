@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
 
-import { DEFAULT_PROCESSING_STATUS, SUPABASE_UNIQUE_VIOLATION_CODE } from "@/lib/constants";
-import { IngestRequestSchema, type IngestRequest, type IngestResponse } from "@/lib/schemas/content";
+import { type IngestRequest, type IngestResponse } from "@/lib/schemas/content";
 import { supabaseAdmin } from "@/lib/supabase/supabase-admin";
 import { ingestContentTask } from "@/src/trigger/ingest-content";
+import { z } from "zod";
 
-const EMPTY_RESULT_CODE = "PGRST116";
+const IngestRequestSchema = z.object({
+	url: z.url()
+});
 
 export async function POST(request: Request): Promise<NextResponse> {
 	const requestBody = await parseRequestBody(request);
 	if (!requestBody) {
-		return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+		return NextResponse.json({ error: "Invalid request payload. Expected a JSON body." }, { status: 400 });
 	}
 
 	const parseResult = IngestRequestSchema.safeParse(requestBody);
@@ -21,47 +23,36 @@ export async function POST(request: Request): Promise<NextResponse> {
 		);
 	}
 
-	const normalizedUrl = normalizeUrl(parseResult.data.url);
+	const normalizedURL = normalizeUrl(parseResult.data.url);
+	const existingContentRecord = await findContentByURL(normalizedURL);
 
-	const existingRecord = await findContentByUrl(normalizedUrl);
-	if (existingRecord.error) {
-		return NextResponse.json(
-			{ error: `Failed to check existing content: ${existingRecord.error}` },
-			{ status: 500 }
-		);
-	}
-
-	if (existingRecord.data) {
+	if (existingContentRecord) {
 		const existingResponse: IngestResponse = {
-			id: existingRecord.data.id,
-			url: existingRecord.data.url,
-			processingStatus: existingRecord.data.processing_status,
+			id: existingContentRecord.id,
+			url: existingContentRecord.url,
+			processingStatus: existingContentRecord.processing_status,
 			message: "URL already ingested. Returning existing record."
 		};
 
 		return NextResponse.json(existingResponse, { status: 200 });
 	}
 
-	const createdRecord = await createPendingRecord(normalizedUrl);
-	if (createdRecord.error || !createdRecord.data) {
-		return NextResponse.json({ error: `Failed to create content record: ${createdRecord.error}` }, { status: 500 });
-	}
+	const createdContentRecord = await createPendingRecord(normalizedURL);
 
 	try {
 		await ingestContentTask.trigger({
-			contentId: createdRecord.data.id,
-			url: createdRecord.data.url
+			contentId: createdContentRecord.id,
+			url: createdContentRecord.url
 		});
 	} catch (error) {
-		await markIngestionFailed(createdRecord.data.id, error);
-
+		await markIngestionFailed(createdContentRecord.id, error);
 		return NextResponse.json({ error: "Failed to schedule ingestion task." }, { status: 500 });
 	}
 
 	const successResponse: IngestResponse = {
-		id: createdRecord.data.id,
-		url: createdRecord.data.url,
-		processingStatus: createdRecord.data.processing_status,
+		id: createdContentRecord.id,
+		url: createdContentRecord.url,
+		processingStatus: createdContentRecord.processing_status,
 		message: "Ingestion started."
 	};
 
@@ -80,66 +71,82 @@ function normalizeUrl(url: string): string {
 	return url.trim();
 }
 
-async function findContentByUrl(url: string): Promise<{
-	data: { id: string; url: string; processing_status: IngestResponse["processingStatus"] } | null;
-	error: string | null;
-}> {
-	const { data, error } = await supabaseAdmin
-		.from("content")
-		.select("id, url, processing_status")
-		.eq("url", url)
-		.maybeSingle();
-
-	if (!error) {
-		return { data, error: null };
-	}
-
-	if (error.code === EMPTY_RESULT_CODE) {
-		return { data: null, error: null };
-	}
-
-	return { data: null, error: error.message };
+interface ContentRecord {
+	id: string;
+	url: string;
+	processing_status: IngestResponse["processingStatus"];
 }
 
-async function createPendingRecord(url: string): Promise<{
-	data: { id: string; url: string; processing_status: IngestResponse["processingStatus"] } | null;
-	error: string | null;
-}> {
-	const { data, error } = await supabaseAdmin
-		.from("content")
-		.insert({
-			url,
-			processing_status: DEFAULT_PROCESSING_STATUS
-		})
-		.select("id, url, processing_status")
-		.single();
+/**
+ * Finds a content record by URL.
+ * @param URL - The URL to find the content record by.
+ * @returns The content record if found, otherwise null.
+ */
+async function findContentByURL(URL: string): Promise<ContentRecord | null> {
+	try {
+		console.info("Finding content record by URL from the database...", { URL });
+		const { data } = await supabaseAdmin
+			.from("content")
+			.select("id, url, processing_status")
+			.eq("url", URL)
+			.maybeSingle()
+			.throwOnError();
 
-	if (!error) {
-		return {
-			data: {
-				id: data.id,
-				url: data.url,
-				processing_status: data.processing_status
-			},
-			error: null
-		};
+		return data;
+	} catch (error) {
+		console.error("Failed to find content record by URL", { URL, error });
+		throw error;
 	}
-
-	if (error.code !== SUPABASE_UNIQUE_VIOLATION_CODE) {
-		return { data: null, error: error.message };
-	}
-
-	return findContentByUrl(url);
 }
 
-async function markIngestionFailed(contentId: string, error: unknown): Promise<void> {
-	const message = error instanceof Error ? error.message : "Unknown Trigger.dev error";
+/**
+ * Creates a pending content record for a given URL.
+ * @param URL - The URL to create a pending content record for.
+ * @returns The created content record.
+ */
+async function createPendingRecord(url: string): Promise<ContentRecord> {
+	try {
+		console.info("Creating pending content record for URL...", { url });
+		const { data } = await supabaseAdmin
+			.from("content")
+			.insert({
+				url,
+				processing_status: "pending"
+			})
+			.select("id, url, processing_status")
+			.single()
+			.throwOnError();
 
-	await supabaseAdmin
-		.from("content")
-		.update({
-			processing_status: "failed",
-			processing_error_message: message
-		})
-		.eq("id", contentId);
+		console.info("Content record in state 'pending' created successfully", { data });
+
+		return data;
+	} catch (error) {
+		console.error("Failed to create pending content record", { url, error });
+		throw error;
+	}
+}
+/**
+ * Marks a content record as failed.
+ * @param contentId - The ID of the content record to mark as failed.
+ * @param error - The error that occurred.
+ */
+async function markIngestionFailed(contentID: string, error: unknown): Promise<void> {
+	try {
+		const message = error instanceof Error ? error.message : "Unknown Trigger.dev error";
+
+		console.info("Marking content record processing status as 'failed'...", { contentID, message });
+		await supabaseAdmin
+			.from("content")
+			.update({
+				processing_status: "failed",
+				processing_error_message: message
+			})
+			.eq("id", contentID)
+			.throwOnError();
+
+		console.info("Content record processing status marked as 'failed' successfully", { contentID });
+	} catch (error) {
+		console.error("Failed to mark content record as failed", { contentID, error });
+		// we don't want to throw an error here because we want to continue with the request.
+	}
 }
