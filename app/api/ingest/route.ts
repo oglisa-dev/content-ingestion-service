@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import {
-  DEFAULT_PROCESSING_STATUS,
+  DEFAULT_PROCESSING_STATUS, 
   SUPABASE_UNIQUE_VIOLATION_CODE,
 } from "@/lib/constants";
 import {

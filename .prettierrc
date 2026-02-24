@@ -1,0 +1,23 @@
+{
+	"tabWidth": 4,
+	"useTabs": true,
+	"semi": true,
+	"printWidth": 120,
+	"singleQuote": false,
+	"arrowParens": "always",
+	"trailingComma": "none",
+	"importOrder": [
+		"/^(?!.*\\.css).*/",
+		"^server-only$",
+		"^react$",
+		"^react-dom$",
+		"^next$",
+		"^next/(.*)$",
+		"^@supabase/supabase-js$",
+		"^~/(.*)$",
+		"^[./]"
+	],
+	"tailwindFunctions": ["tw", "clsx", "cn", "cva"],
+	"importOrderSeparation": true,
+	"importOrderSortSpecifiers": true
+}
