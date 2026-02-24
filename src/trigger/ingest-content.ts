@@ -13,10 +13,7 @@ import {
 	LOW_CONFIDENCE_THRESHOLD,
 	MAX_CONTENT_CHARS
 } from "@/lib/constants";
-import {
-	ClassifyContentResponseSchema,
-	type ClassifyContentResponse
-} from "@/lib/schemas/content";
+import { ClassifyContentResponseSchema, type ClassifyContentResponse } from "@/lib/schemas/content";
 import { supabaseAdmin } from "@/lib/supabase/supabase-admin";
 
 interface IngestContentPayload {
@@ -85,8 +82,7 @@ async function fetchHtmlFromURL(url: string): Promise<string> {
 			responseType: "text",
 			maxRedirects: 5,
 			headers: {
-				"User-Agent":
-					"Mozilla/5.0 (compatible; ContentIngestionBot/1.0; +https://example.com/bot)"
+				"User-Agent": "Mozilla/5.0 (compatible; ContentIngestionBot/1.0; +https://example.com/bot)"
 			},
 			validateStatus: (status) => status >= 200 && status < 400
 		});
@@ -120,9 +116,7 @@ function extractMainContentFromHtml(html: string, url: string): ExtractedContent
 	};
 }
 
-async function classifyAndSummarizeWithRetry(
-	extractedContent: ExtractedContent
-): Promise<ClassifyContentResponse> {
+async function classifyAndSummarizeWithRetry(extractedContent: ExtractedContent): Promise<ClassifyContentResponse> {
 	const truncatedBodyText = extractedContent.bodyText?.slice(0, MAX_CONTENT_CHARS);
 	if (!truncatedBodyText) {
 		throw new Error("No body text extracted for AI classification.");
@@ -271,7 +265,7 @@ function getPublishDateFromDocument(document: Document): string | null {
 		'meta[name="pubdate"]',
 		'meta[name="publish_date"]',
 		'meta[name="date"]',
-		'time[datetime]'
+		"time[datetime]"
 	]);
 
 	if (!publishDateValue) {
