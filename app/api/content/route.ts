@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { CONTENT_TABLE, DEFAULT_PAGE_LIMIT } from "@/lib/constants";
+import { DEFAULT_PAGE_LIMIT } from "@/lib/constants";
 import { ContentFilterSchema } from "@/lib/schemas/content";
 import { supabaseAdmin } from "@/lib/supabase/supabase-admin";
 
@@ -62,7 +62,7 @@ interface ContentFilterInput {
 
 async function getContentRecords(filters: ContentFilterInput): Promise<ContentListItem[]> {
 	let query = supabaseAdmin
-		.from(CONTENT_TABLE)
+		.from("content")
 		.select(
 			"id, url, title, author, publish_date, summary, category, confidence_score, needs_review, processing_status, processing_error_message, created_at"
 		)

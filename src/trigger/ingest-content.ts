@@ -5,7 +5,7 @@ import { fetchAndExtractMainContent } from "@/src/utils/content-extraction";
 import { type ExtractedContent } from "@/src/utils/content-extraction";
 import { type ClassifyContentResponse } from "@/lib/schemas/content";
 import { supabaseAdmin } from "@/lib/supabase/supabase-admin";
-import { CONTENT_TABLE } from "@/lib/constants";
+import { LOW_CONFIDENCE_THRESHOLD } from "@/lib/constants";
 import { logger } from "@trigger.dev/sdk/v3";
 
 interface IngestContentPayload {
@@ -36,14 +36,17 @@ export const IngestContentTask = task({
 
 export async function markContentAsProcessing(contentId: string): Promise<void> {
 	try {
+		logger.info("Marking content processing status as 'processing' in the database...", { contentId });
 		await supabaseAdmin
-			.from(CONTENT_TABLE)
+			.from("content")
 			.update({
 				processing_status: "processing",
 				processing_error_message: null
 			})
 			.eq("id", contentId)
 			.throwOnError();
+
+		logger.info("Content processing status marked as 'processing' in the database successfully", { contentId });
 	} catch (error) {
 		logger.error("Failed to set content status to processing", { contentId, error });
 		throw error;
@@ -56,8 +59,9 @@ export async function markContentAsCompleted(
 	aiMetadata: ClassifyContentResponse
 ): Promise<void> {
 	try {
+		logger.info("Marking content processing status as 'completed' in the database...", { contentId });
 		await supabaseAdmin
-			.from(CONTENT_TABLE)
+			.from("content")
 			.update({
 				title: extractedContent.title,
 				body_text: extractedContent.bodyText,
@@ -72,6 +76,8 @@ export async function markContentAsCompleted(
 			})
 			.eq("id", contentId)
 			.throwOnError();
+
+		logger.info("Content processing status marked as 'completed' in the database successfully", { contentId });
 	} catch (error) {
 		logger.error("Failed to persist completed content", { contentId, error });
 		throw error;
@@ -82,14 +88,17 @@ export async function markContentAsFailed(contentId: string, error: unknown): Pr
 	const message = error instanceof Error ? error.message : "Unknown processing error";
 
 	try {
+		logger.info("Marking content processing status as 'failed' in the database...", { contentId });
 		await supabaseAdmin
-			.from(CONTENT_TABLE)
+			.from("content")
 			.update({
 				processing_status: "failed",
 				processing_error_message: message
 			})
 			.eq("id", contentId)
 			.throwOnError();
+
+		logger.info("Content processing status marked as 'failed' in the database successfully", { contentId });
 	} catch (updateError) {
 		logger.error("Failed to persist failed status", {
 			contentId,
