@@ -12,6 +12,7 @@
 		"supabase:start": "supabase start"
 	},
 	"dependencies": {
+		"@ai-sdk/google": "^3.0.30",
 		"@ai-sdk/openai": "^3.0.31",
 		"@mozilla/readability": "^0.6.0",
 		"@supabase/supabase-js": "^2.97.0",

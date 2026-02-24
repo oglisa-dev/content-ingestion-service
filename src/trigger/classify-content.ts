@@ -3,7 +3,7 @@ import { retry, task } from "@trigger.dev/sdk/v3";
 import { type ClassifyContentResponse } from "@/lib/schemas/content";
 import { type ExtractedContent } from "@/src/utils/content-extraction";
 import { generateText, Output } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { google } from "@ai-sdk/google";
 import { MAX_CONTENT_CHARS } from "@/lib/constants";
 import {
 	buildContentClassificationPrompt,
@@ -13,7 +13,7 @@ import { ClassifyContentResponseSchema } from "@/lib/schemas/content";
 import { logger } from "@trigger.dev/sdk/v3";
 
 const LLM_RETRY_MAX_ATTEMPTS = 3;
-const LLM_MODEL = "gpt-4o-mini";
+const LLM_MODEL = "gemini-2.5-flash";
 
 const RETRY_FACTOR = 2;
 const RETRY_MIN_TIMEOUT_MS = 1000;
@@ -38,7 +38,7 @@ export const ClassifyContentTask = task({
 				try {
 					const prompt = buildContentClassificationPrompt(input);
 					const { output } = await generateText({
-						model: openai(LLM_MODEL),
+						model: google(LLM_MODEL),
 						output: Output.object({
 							schema: ClassifyContentResponseSchema
 						}),
