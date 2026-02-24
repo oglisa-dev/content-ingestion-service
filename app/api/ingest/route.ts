@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { type IngestRequest, type IngestResponse } from "@/lib/schemas/content";
 import { supabaseAdmin } from "@/lib/supabase/supabase-admin";
-import { ingestContentTask } from "@/src/trigger/ingest-content";
+import { IngestContentTask } from "@/src/trigger/ingest-content";
 import { z } from "zod";
 
 const IngestRequestSchema = z.object({
@@ -40,7 +40,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 	const createdContentRecord = await createPendingRecord(normalizedURL);
 
 	try {
-		await ingestContentTask.trigger({
+		await IngestContentTask.trigger({
 			contentId: createdContentRecord.id,
 			url: createdContentRecord.url
 		});

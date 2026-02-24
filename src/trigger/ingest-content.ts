@@ -1,8 +1,7 @@
 import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import axios from "axios";
-import { JSDOM } from "jsdom";
-import { Readability } from "@mozilla/readability";
+import * as cherio from "cherio";
 import { logger, task } from "@trigger.dev/sdk/v3";
 
 import {
@@ -28,7 +27,21 @@ interface ExtractedContent {
 	publishDate: string | null;
 }
 
-export const ingestContentTask = task({
+const AUTHOR_META_SELECTORS = [
+	'meta[name="author"]',
+	'meta[property="article:author"]',
+	'meta[name="byline"]'
+] as const;
+const PUBLISH_DATE_META_SELECTORS = [
+	'meta[property="article:published_time"]',
+	'meta[name="pubdate"]',
+	'meta[name="publish_date"]',
+	'meta[name="date"]'
+] as const;
+const TITLE_META_SELECTORS = ['meta[property="og:title"]', 'meta[name="twitter:title"]'] as const;
+const CONTENT_ROOT_SELECTORS = ["article", "main", '[role="main"]', ".post-content", ".entry-content"] as const;
+
+export const IngestContentTask = task({
 	id: "ingest-content",
 	run: async (payload: IngestContentPayload) => {
 		await markContentAsProcessing(payload.contentId);
@@ -49,18 +62,18 @@ export const ingestContentTask = task({
 	}
 });
 
-async function markContentAsProcessing(contentId: string): Promise<void> {
+async function markContentAsProcessing(contentID: string): Promise<void> {
 	try {
 		await supabaseAdmin
-			.from(CONTENT_TABLE)
+			.from("content")
 			.update({
 				processing_status: "processing",
 				processing_error_message: null
 			})
-			.eq("id", contentId)
+			.eq("id", contentID)
 			.throwOnError();
 	} catch (error) {
-		logger.error("Failed to set content status to processing", { contentId, error });
+		logger.error("Failed to set content status to processing", { contentID, error });
 		throw error;
 	}
 }
@@ -68,7 +81,7 @@ async function markContentAsProcessing(contentId: string): Promise<void> {
 async function fetchAndExtractMainContent(url: string): Promise<ExtractedContent> {
 	try {
 		const html = await fetchHtmlFromURL(url);
-		return extractMainContentFromHtml(html, url);
+		return extractMainContentFromHtml(html);
 	} catch (error) {
 		logger.error("Failed to fetch and extract content", { url, error });
 		throw error;
@@ -98,21 +111,22 @@ async function fetchHtmlFromURL(url: string): Promise<string> {
 	}
 }
 
-function extractMainContentFromHtml(html: string, url: string): ExtractedContent {
-	const dom = new JSDOM(html, { url });
-	const document = dom.window.document;
-	const readability = new Readability(document);
-	const article = readability.parse();
+function extractMainContentFromHtml(html: string): ExtractedContent {
+	const $ = cherio.load(html);
+	const title = extractTitleFromHtml($);
+	const author = extractAuthorFromHtml($);
+	const publishDate = extractPublishDateFromHtml($);
+	const bodyText = extractBodyTextFromHtml($);
 
-	if (!article?.textContent?.trim()) {
+	if (!bodyText) {
 		throw new Error("Could not extract readable article content.");
 	}
 
 	return {
-		title: article.title ?? document.title ?? null,
-		bodyText: article.textContent.trim().slice(0, MAX_CONTENT_CHARS),
-		author: getAuthorFromDocument(document),
-		publishDate: getPublishDateFromDocument(document)
+		title,
+		bodyText,
+		author,
+		publishDate
 	};
 }
 
@@ -245,55 +259,101 @@ async function markContentAsFailed(contentId: string, error: unknown): Promise<v
 	}
 }
 
-function getAuthorFromDocument(document: Document): string | null {
-	const authorValue = readMetaContent(document, [
-		'meta[name="author"]',
-		'meta[property="article:author"]',
-		'meta[name="byline"]'
-	]);
+function extractTitleFromHtml($: cherio.Root): string | null {
+	const socialTitle = extractMetaContent($, TITLE_META_SELECTORS);
+	if (socialTitle) {
+		return socialTitle;
+	}
 
-	if (!authorValue) {
+	const documentTitle = normalizeText($("title").first().text());
+	if (!documentTitle) {
 		return null;
 	}
 
-	return authorValue.trim() || null;
+	return documentTitle;
 }
 
-function getPublishDateFromDocument(document: Document): string | null {
-	const publishDateValue = readMetaContent(document, [
-		'meta[property="article:published_time"]',
-		'meta[name="pubdate"]',
-		'meta[name="publish_date"]',
-		'meta[name="date"]',
-		"time[datetime]"
-	]);
+function extractAuthorFromHtml($: cherio.Root): string | null {
+	return extractMetaContent($, AUTHOR_META_SELECTORS);
+}
 
-	if (!publishDateValue) {
+function extractPublishDateFromHtml($: cherio.Root): string | null {
+	const publishDateMeta = extractMetaContent($, PUBLISH_DATE_META_SELECTORS);
+	if (publishDateMeta) {
+		return toIsoDate(publishDateMeta);
+	}
+
+	const timeValue = normalizeText($("time[datetime]").first().attr("datetime") ?? null);
+	if (!timeValue) {
 		return null;
 	}
 
-	const parsedDate = new Date(publishDateValue);
+	return toIsoDate(timeValue);
+}
+
+function extractBodyTextFromHtml($: cherio.Root): string | null {
+	for (const selector of CONTENT_ROOT_SELECTORS) {
+		const root = $(selector).first();
+		if (!root.length) {
+			continue;
+		}
+
+		const paragraphs = root
+			.find("p")
+			.map((_index: number, element: unknown) => normalizeText($(element).text()))
+			.get()
+			.filter(Boolean) as string[];
+		const joinedParagraphs = normalizeText(paragraphs.join(" "));
+
+		if (joinedParagraphs) {
+			return joinedParagraphs.slice(0, MAX_CONTENT_CHARS);
+		}
+	}
+
+	const fallbackParagraphs = $("p")
+		.map((_index: number, element: unknown) => normalizeText($(element).text()))
+		.get()
+		.filter(Boolean) as string[];
+	const fallbackText = normalizeText(fallbackParagraphs.join(" "));
+
+	if (!fallbackText) {
+		return null;
+	}
+
+	return fallbackText.slice(0, MAX_CONTENT_CHARS);
+}
+
+function extractMetaContent($: cherio.Root, selectors: readonly string[]): string | null {
+	for (const selector of selectors) {
+		const value = normalizeText($(selector).first().attr("content") ?? null);
+		if (value) {
+			return value;
+		}
+	}
+
+	return null;
+}
+
+function normalizeText(value: string | null): string | null {
+	if (!value) {
+		return null;
+	}
+
+	const normalized = value.replace(/\s+/g, " ").trim();
+	if (!normalized) {
+		return null;
+	}
+
+	return normalized;
+}
+
+function toIsoDate(value: string): string | null {
+	const parsedDate = new Date(value);
 	if (Number.isNaN(parsedDate.valueOf())) {
 		return null;
 	}
 
 	return parsedDate.toISOString();
-}
-
-function readMetaContent(document: Document, selectors: string[]): string | null {
-	for (const selector of selectors) {
-		const element = document.querySelector(selector);
-		if (!element) {
-			continue;
-		}
-
-		const content = element.getAttribute("content") ?? element.getAttribute("datetime");
-		if (content?.trim()) {
-			return content;
-		}
-	}
-
-	return null;
 }
 
 function getBackoffDelay(attempt: number): number {

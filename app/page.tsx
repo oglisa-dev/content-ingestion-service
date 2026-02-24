@@ -273,27 +273,88 @@ const ContentCard: FC<ContentCardProps> = ({ item }) => {
 };
 
 const StatusPill: FC<StatusPillProps> = ({ status }) => {
+	const statusMetadata = getStatusMetadata(status);
+
 	return (
-		<span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${getStatusPillClassName(status)}`}>
-			{status}
+		<span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${statusMetadata.className}`}>
+			<StatusIcon status={status} />
+			{statusMetadata.label}
 		</span>
 	);
 };
 
-function getStatusPillClassName(status: ContentItem["processing_status"]): string {
+const StatusIcon: FC<StatusIconProps> = ({ status }) => {
 	if (status === "completed") {
-		return "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300";
+		return (
+			<svg viewBox="0 0 20 20" className="h-3.5 w-3.5" aria-hidden>
+				<path
+					fill="currentColor"
+					d="M16.7 5.3a1 1 0 0 1 0 1.4l-7.2 7.2a1 1 0 0 1-1.4 0L4.3 10a1 1 0 0 1 1.4-1.4l3.1 3.1 6.5-6.4a1 1 0 0 1 1.4 0Z"
+				/>
+			</svg>
+		);
 	}
 
 	if (status === "processing") {
-		return "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300";
+		return (
+			<svg viewBox="0 0 20 20" className="h-3.5 w-3.5 animate-spin" aria-hidden>
+				<path
+					fill="currentColor"
+					fillRule="evenodd"
+					d="M10 3a7 7 0 1 0 7 7 1 1 0 1 1 2 0A9 9 0 1 1 10 1a1 1 0 1 1 0 2Z"
+					clipRule="evenodd"
+				/>
+			</svg>
+		);
 	}
 
 	if (status === "failed") {
-		return "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300";
+		return (
+			<svg viewBox="0 0 20 20" className="h-3.5 w-3.5" aria-hidden>
+				<path
+					fill="currentColor"
+					d="M10 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm3.7 4.3a1 1 0 0 0-1.4 0L10 8.6 7.7 6.3a1 1 0 1 0-1.4 1.4L8.6 10l-2.3 2.3a1 1 0 1 0 1.4 1.4L10 11.4l2.3 2.3a1 1 0 0 0 1.4-1.4L11.4 10l2.3-2.3a1 1 0 0 0 0-1.4Z"
+				/>
+			</svg>
+		);
 	}
 
-	return "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300";
+	return (
+		<svg viewBox="0 0 20 20" className="h-3.5 w-3.5" aria-hidden>
+			<path
+				fill="currentColor"
+				d="M10 2a8 8 0 1 1 0 16 8 8 0 0 1 0-16Zm0 4a1 1 0 0 0-1 1v3.4a1 1 0 0 0 .3.7l2 2a1 1 0 0 0 1.4-1.4L11 9.9V7a1 1 0 0 0-1-1Z"
+			/>
+		</svg>
+	);
+};
+
+function getStatusMetadata(status: ContentItem["processing_status"]): StatusMetadata {
+	if (status === "completed") {
+		return {
+			label: "completed",
+			className: "bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300"
+		};
+	}
+
+	if (status === "processing") {
+		return {
+			label: "processing",
+			className: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
+		};
+	}
+
+	if (status === "failed") {
+		return {
+			label: "failed",
+			className: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300"
+		};
+	}
+
+	return {
+		label: "pending",
+		className: "bg-zinc-200 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+	};
 }
 
 function formatDate(value: string | null): string {
@@ -353,6 +414,15 @@ interface ContentCardProps {
 
 interface StatusPillProps {
 	status: ContentItem["processing_status"];
+}
+
+interface StatusIconProps {
+	status: ContentItem["processing_status"];
+}
+
+interface StatusMetadata {
+	label: string;
+	className: string;
 }
 
 interface IngestResponse {
