@@ -26,6 +26,7 @@ create table if not exists public.content (
   summary text,
   category text,
   confidence_score double precision,
+  metadata jsonb,
   needs_review boolean not null default false,
   processing_status content_processing_status not null default 'pending',
   processing_error_message text,
