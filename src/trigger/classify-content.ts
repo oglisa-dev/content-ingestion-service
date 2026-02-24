@@ -4,13 +4,16 @@ import { type ClassifyContentResponse } from "@/lib/schemas/content";
 import { type ExtractedContent } from "@/src/utils/content-extraction";
 import { generateText, Output } from "ai";
 import { openai } from "@ai-sdk/openai";
-import { LLM_MODEL, LLM_RETRY_MAX_ATTEMPTS, MAX_CONTENT_CHARS } from "@/lib/constants";
+import { MAX_CONTENT_CHARS } from "@/lib/constants";
 import {
 	buildContentClassificationPrompt,
 	type ClassificationPromptInput
 } from "@/src/prompts/content-classification-prompt";
 import { ClassifyContentResponseSchema } from "@/lib/schemas/content";
 import { logger } from "@trigger.dev/sdk/v3";
+
+const LLM_RETRY_MAX_ATTEMPTS = 3;
+const LLM_MODEL = "gpt-4o-mini";
 
 const RETRY_FACTOR = 2;
 const RETRY_MIN_TIMEOUT_MS = 1000;

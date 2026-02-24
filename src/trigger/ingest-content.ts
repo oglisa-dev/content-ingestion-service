@@ -5,7 +5,8 @@ import { ExtractContentTask } from "@/src/trigger/extract-content";
 import { type ExtractedContent } from "@/src/utils/content-extraction";
 import { type ClassifyContentResponse } from "@/lib/schemas/content";
 import { supabaseAdmin } from "@/lib/supabase/supabase-admin";
-import { LOW_CONFIDENCE_THRESHOLD } from "@/lib/constants";
+
+const LOW_CONFIDENCE_THRESHOLD = 0.6;
 
 interface IngestContentPayload {
 	contentId: string;
