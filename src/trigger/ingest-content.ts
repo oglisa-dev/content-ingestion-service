@@ -1,12 +1,11 @@
-import { task } from "@trigger.dev/sdk/v3";
+import { idempotencyKeys, logger, task } from "@trigger.dev/sdk/v3";
 
-import { classifyAndSummarizeWithRetry } from "@/src/utils/classify-content";
-import { fetchAndExtractMainContent } from "@/src/utils/content-extraction";
+import { ClassifyContentTask } from "@/src/trigger/classify-content";
+import { ExtractContentTask } from "@/src/trigger/extract-content";
 import { type ExtractedContent } from "@/src/utils/content-extraction";
 import { type ClassifyContentResponse } from "@/lib/schemas/content";
 import { supabaseAdmin } from "@/lib/supabase/supabase-admin";
 import { LOW_CONFIDENCE_THRESHOLD } from "@/lib/constants";
-import { logger } from "@trigger.dev/sdk/v3";
 
 interface IngestContentPayload {
 	contentId: string;
@@ -16,12 +15,32 @@ interface IngestContentPayload {
 export const IngestContentTask = task({
 	id: "ingest-content",
 	run: async (payload: IngestContentPayload) => {
+		logger.info("Starting content ingestion task", { payload });
+		const URL = payload.url;
+
 		await markContentAsProcessing(payload.contentId);
+		const idempotencyKey = await idempotencyKeys.create(payload.contentId);
 
 		try {
-			const extractedContent = await fetchAndExtractMainContent(payload.url);
-			const aiMetadata = await classifyAndSummarizeWithRetry(extractedContent);
-			await markContentAsCompleted(payload.contentId, extractedContent, aiMetadata);
+			const extractedContent = await ExtractContentTask.triggerAndWait(
+				{
+					url: URL
+				},
+				{
+					idempotencyKey
+				}
+			).unwrap();
+
+			const aiMetadata = await ClassifyContentTask.triggerAndWait(
+				{
+					extractedContent
+				},
+				{
+					idempotencyKey
+				}
+			).unwrap();
+
+			await updateCompletedContent(payload.contentId, extractedContent, aiMetadata);
 
 			return {
 				contentId: payload.contentId,
@@ -53,7 +72,7 @@ export async function markContentAsProcessing(contentId: string): Promise<void> 
 	}
 }
 
-export async function markContentAsCompleted(
+export async function updateCompletedContent(
 	contentId: string,
 	extractedContent: ExtractedContent,
 	aiMetadata: ClassifyContentResponse

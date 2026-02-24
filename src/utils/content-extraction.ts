@@ -24,30 +24,7 @@ export interface ExtractedContent {
 	publishDate: string | null;
 }
 
-export async function fetchAndExtractMainContent(url: string): Promise<ExtractedContent> {
-	const html = await fetchHtmlFromURL(url);
-	return extractMainContentFromHtml(html);
-}
-
-async function fetchHtmlFromURL(url: string): Promise<string> {
-	const response = await axios.get<string>(url, {
-		timeout: AXIOS_TIMEOUT_MS,
-		responseType: "text",
-		maxRedirects: 5,
-		headers: {
-			"User-Agent": "Mozilla/5.0 (compatible; ContentIngestionBot/1.0; +https://example.com/bot)"
-		},
-		validateStatus: (status) => status >= 200 && status < 400
-	});
-
-	if (!response.data || !response.data.trim()) {
-		throw new Error("Fetched page is empty.");
-	}
-
-	return response.data;
-}
-
-function extractMainContentFromHtml(html: string): ExtractedContent {
+export function extractMainContentFromHtml(html: string): ExtractedContent {
 	const $ = cherio.load(html);
 	const title = extractTitleFromHtml($);
 	const author = extractAuthorFromHtml($);
