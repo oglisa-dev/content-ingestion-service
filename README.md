@@ -1,95 +1,182 @@
 # Content Ingestion Service
 
-Small asynchronous content ingestion service built with Next.js App Router, Trigger.dev, Supabase (Postgres), Zod, and Vercel AI SDK.
+Asynchronous content ingestion service for a CMS, built with Next.js App Router, Trigger.dev background tasks, Supabase Postgres, and Vercel AI SDK.
 
-## Features
+## What this service does
 
-- `POST /api/ingest` accepts a URL and schedules a background ingestion task.
-- Trigger.dev task fetches and extracts article content (title, body text, author, publish date).
-- LLM classification and summary generation with retry logic and confidence scoring.
-- Supabase persistence with processing lifecycle states (`pending`, `processing`, `completed`, `failed`).
-- `GET /api/content` returns stored records with basic filtering by category and processing status.
+- Accepts a URL via `POST /api/ingest`.
+- Stores/updates ingestion records in Supabase.
+- Extracts article content (title, body, author, publish date) in a background task.
+- Classifies the content and generates a summary using an LLM.
+- Persists AI metadata (category, summary, confidence, review flag).
+- Exposes `GET /api/content` with basic filtering.
+- Provides a simple UI on `/` for submission and browsing results.
 
 ## Architecture
 
-1. API route validates input with Zod.
-2. URL is inserted into `content` table with `processing_status = pending`.
-3. Trigger.dev background task runs ingestion pipeline.
-4. Task updates record to `processing`, then `completed` (or `failed`).
-5. GET endpoint reads records with filters.
+### High-level flow
 
-## Tech Stack
+1. Client calls `POST /api/ingest` with `{ url }`.
+2. API validates payload and checks if URL already exists.
+3. API creates/updates DB record and triggers `ingest-content` task.
+4. Parent task `ingest-content` orchestrates child tasks:
+   - `extract-content` (content extraction)
+   - `classify-content` (LLM classification + summary)
+5. Parent task writes final result to DB and updates `processing_status`.
+6. Client reads records through `GET /api/content` or via the UI.
 
-- TypeScript
-- Next.js (App Router)
-- Zod
-- Trigger.dev
-- Supabase/Postgres
-- Vercel AI SDK + OpenAI
-- Axios
-- JSDOM + Readability
+### Trigger.dev task structure
+
+- **Parent task**: `ingest-content`
+  - updates status to `processing`
+  - invokes child tasks with `triggerAndWait`
+  - stores final result as `completed` or marks `failed`
+- **Child task**: `extract-content`
+  - fetches URL HTML with `axios`
+  - parses/extracts title/body/author/publishDate
+- **Child task**: `classify-content`
+  - builds prompt from extracted content
+  - calls LLM via Vercel AI SDK
+  - validates output with Zod schema
+  - retries using Trigger `retry.onThrow`
+
+### Idempotency strategy
+
+To prevent duplicate child runs when the parent retries, parent task uses Trigger idempotency keys for each child invocation:
+
+- extraction key prefix + content ID
+- classification key prefix + content ID
+
+This ensures retries reuse the same child run handle instead of creating duplicates.
+
+## Technology Stack
+
+- **Runtime & Language**: Node.js, TypeScript
+- **Web**: Next.js (App Router), React 19
+- **Validation**: Zod
+- **Background jobs**: Trigger.dev SDK v4
+- **Database**: Supabase (PostgreSQL)
+- **LLM**: Vercel AI SDK (`ai`) + provider SDK (`@ai-sdk/google`)
+- **HTTP fetch**: Axios
+- **HTML parsing**: `cherio`
+- **Styling/UI**: Tailwind CSS
+
+## Project Structure
+
+```txt
+app/
+  api/
+    ingest/route.ts        # URL ingestion endpoint
+    content/route.ts       # content listing endpoint
+  page.tsx                 # simple UI
+
+src/
+  trigger/
+    ingest-content.ts      # parent orchestration task
+    extract-content.ts     # child extraction task
+    classify-content.ts    # child classification task
+  prompts/
+    content-classification-prompt.ts
+  utils/
+    content-extraction.ts
+    classify-content.ts
+
+lib/
+  schemas/content.ts
+  supabase/supabase-admin.ts
+  constants.ts
+
+supabase/
+  migrations/20260224113000_create_content_table.sql
+```
 
 ## Environment Variables
 
-Create `.env.local`:
+Create `.env` (or `.env.local`) using `template.env`:
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-TRIGGER_SECRET_KEY=your_trigger_secret_key
-OPENAI_API_KEY=your_openai_api_key
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=""
+SUPABASE_SERVICE_ROLE_KEY=""
+
+# Trigger.dev
+TRIGGER_SECRET_KEY=""
+
+# LLM
+OPENAI_API_KEY="" # keep if needed by your configuration
+GOOGLE_GENERATIVE_AI_API_KEY="" # required for @ai-sdk/google
 ```
 
-## Local Setup
+> If you use only Google models in `classify-content`, set `GOOGLE_GENERATIVE_AI_API_KEY`.
+> If you switch back to OpenAI provider, ensure `OPENAI_API_KEY` is set and provider code is aligned.
 
-1. Install dependencies:
+## Local Setup (Comprehensive)
+
+### 0) Prerequisites
+
+- Node.js 20+
+- pnpm
+- Supabase CLI
+- Trigger.dev account + project configured in `trigger.config.ts`
+
+### 1) Install dependencies
 
 ```bash
 pnpm install
 ```
 
-2. Start Supabase locally:
+### 2) Start Supabase local stack
 
 ```bash
-supabase start
+pnpm supabase:start
 ```
 
-3. Apply database migration:
+### 3) Apply database migrations
 
 ```bash
-supabase db reset
+pnpm supabase db reset
 ```
 
-4. Start Next.js app:
+### 4) Trigger.dev authentication (required before worker dev mode)
+
+Use Trigger CLI login first:
+
+```bash
+pnpm dlx trigger.dev@latest login
+```
+
+Then start task worker (separate terminal):
+
+```bash
+pnpm dlx trigger.dev@latest dev
+```
+
+Trigger quick start reference: [Trigger.dev Quick start](https://trigger.dev/docs/quick-start)
+
+### 5) Start Next.js app (another terminal)
 
 ```bash
 pnpm dev
 ```
 
-5. In a separate terminal, run Trigger.dev dev worker:
+### 6) Open app
 
-```bash
-npx trigger.dev@latest dev
-```
+- Web UI: `http://localhost:3000`
+- Submit URL in form and watch status transitions.
 
-## Database Schema
+## Running in parallel terminals
 
-Migration file:
+You should have 3 terminals running:
 
-- `supabase/migrations/20260224113000_create_content_table.sql`
-
-Includes:
-
-- enum type `content_processing_status`
-- `content` table for source + AI metadata
-- index on category, processing status, and created date
-- automatic `updated_at` trigger
+1. **Supabase**: `pnpm supabase:start`
+2. **Trigger worker**: `pnpm dlx trigger.dev@latest dev`
+3. **Next.js app**: `pnpm dev`
 
 ## API Reference
 
-### `POST /api/ingest`
+## `POST /api/ingest`
 
-Request body:
+Body:
 
 ```json
 {
@@ -97,46 +184,60 @@ Request body:
 }
 ```
 
-Success response (`202`):
+Response behavior:
 
-```json
-{
-  "id": "uuid",
-  "url": "https://example.com/article",
-  "processingStatus": "pending",
-  "message": "Ingestion started."
-}
-```
+- `202`: ingestion started (new record)
+- `202`: existing failed record reset to `pending` and retriggered
+- `409`: URL already exists with non-failed status
+- `400`: invalid payload
+- `500`: scheduling failure
 
-### `GET /api/content`
+## `GET /api/content`
 
 Query params:
 
 - `category` (optional)
-- `processingStatus` (optional): `pending|processing|completed|failed`
+- `processingStatus` (optional: `pending|processing|completed|failed`)
 - `limit` (optional, default 20, max 100)
 
 Example:
 
 ```bash
-curl "http://localhost:3000/api/content?category=technology&processingStatus=completed&limit=10"
+curl "http://localhost:3000/api/content?processingStatus=completed&limit=20"
 ```
 
-## Error Handling
+## Database Schema Notes
 
-- Invalid POST payload returns `400`.
-- Duplicate URLs return existing record (`200`) instead of creating duplicates.
-- Fetch/extraction/LLM failures set `processing_status = failed`.
-- Failure details are persisted in `processing_error_message`.
-- LLM retries use exponential backoff (up to 3 attempts).
+Migration file: `supabase/migrations/20260224113000_create_content_table.sql`
 
-## Submission Write-up Template (5-10 sentences)
+Includes:
 
-I built a content ingestion pipeline with Next.js App Router, Trigger.dev, Supabase, Zod, and Vercel AI SDK.  
-I used AI assistance for initial architecture scaffolding and prompt drafting, then implemented the API contracts, task orchestration, extraction, retries, and persistence logic manually.  
-The ingestion route only schedules work and returns quickly, while Trigger.dev handles long-running steps to avoid serverless timeout risk.  
-I used Readability with JSDOM for content extraction and axios for robust HTTP handling with timeouts.  
-The LLM output is schema-validated and stored with category, summary, confidence score, and `needs_review` flag.  
-I added retry logic with backoff around model calls to improve reliability.  
-I prioritized a resilient async pipeline and observability (`processing_status` + `processing_error_message`) over richer UI features to fit the time limit.  
-As a trade-off, I kept taxonomy and ranking simple and focused on correctness of ingestion and persistence.
+- enum: `content_processing_status`
+- `content` table with extraction + AI fields
+- `metadata jsonb` column
+- status/error tracking columns
+- `created_at`, `updated_at`
+- indexes for category/status/created_at
+
+## Troubleshooting
+
+- **Trigger worker cannot import tasks**
+  - ensure all task files are under `src/trigger` (configured in `trigger.config.ts`)
+  - rerun `pnpm dlx trigger.dev@latest dev`
+- **No task runs appear**
+  - confirm CLI login and project selection
+  - verify `trigger.config.ts` `project` id
+- **Supabase query errors**
+  - run `pnpm supabase db reset` again
+  - verify env vars match local/remote target
+- **LLM failures**
+  - verify provider API key is present
+  - check Trigger run logs for schema validation or provider errors
+
+## Useful Commands
+
+```bash
+pnpm lint
+pnpm exec tsc --noEmit
+pnpm format
+```
