@@ -33,7 +33,16 @@ export const ClassifyContentTask = task({
 		return retry.onThrow(
 			async ({ attempt }) => {
 				try {
-					return await classifyAndSummarizeContent(input);
+					const prompt = buildContentClassificationPrompt(input);
+					const { output } = await generateText({
+						model: openai(LLM_MODEL),
+						output: Output.object({
+							schema: ClassifyContentResponseSchema
+						}),
+						prompt
+					});
+
+					return output;
 				} catch (error) {
 					logger.warn("LLM classification attempt failed", { attempt, error });
 					throw error;
@@ -49,19 +58,6 @@ export const ClassifyContentTask = task({
 		);
 	}
 });
-
-async function classifyAndSummarizeContent(input: ClassificationPromptInput): Promise<ClassifyContentResponse> {
-	const prompt = buildContentClassificationPrompt(input);
-	const { output } = await generateText({
-		model: openai(LLM_MODEL),
-		output: Output.object({
-			schema: ClassifyContentResponseSchema
-		}),
-		prompt
-	});
-
-	return output;
-}
 
 function toClassificationPromptInput(extractedContent: ExtractedContent): ClassificationPromptInput | null {
 	const truncatedBodyText = extractedContent.bodyText?.slice(0, MAX_CONTENT_CHARS);
