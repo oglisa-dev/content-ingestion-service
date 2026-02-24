@@ -9,10 +9,9 @@ import {
   type IngestRequest,
   type IngestResponse,
 } from "@/lib/schemas/content";
-import { supabaseAdmin } from "@/lib/supabase-admin";
+import { supabaseAdmin } from "@/lib/supabase/supabase-admin";
 import { ingestContentTask } from "@/src/trigger/ingest-content";
 
-const CONTENT_TABLE = "content";
 const EMPTY_RESULT_CODE = "PGRST116";
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -102,7 +101,7 @@ async function findContentByUrl(url: string): Promise<{
   error: string | null;
 }> {
   const { data, error } = await supabaseAdmin
-    .from(CONTENT_TABLE)
+    .from("content")
     .select("id, url, processing_status")
     .eq("url", url)
     .maybeSingle();
@@ -123,7 +122,7 @@ async function createPendingRecord(url: string): Promise<{
   error: string | null;
 }> {
   const { data, error } = await supabaseAdmin
-    .from(CONTENT_TABLE)
+    .from("content")
     .insert({
       url,
       processing_status: DEFAULT_PROCESSING_STATUS,
@@ -153,7 +152,7 @@ async function markIngestionFailed(contentId: string, error: unknown): Promise<v
   const message = error instanceof Error ? error.message : "Unknown Trigger.dev error";
 
   await supabaseAdmin
-    .from(CONTENT_TABLE)
+    .from("content")
     .update({
       processing_status: "failed",
       processing_error_message: message,
