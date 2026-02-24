@@ -24,6 +24,7 @@ export const ExtractContentTask = task({
 });
 
 async function fetchHtmlFromURL(url: string): Promise<string> {
+	logger.info("Fetching HTML content from the provided URL", { url });
 	const response = await axios.get<string>(url, {
 		timeout: AXIOS_TIMEOUT_MS,
 		responseType: "text",
@@ -34,8 +35,11 @@ async function fetchHtmlFromURL(url: string): Promise<string> {
 		validateStatus: (status) => status >= 200 && status < 400
 	});
 
+	logger.info("HTML content fetched successfully", { url });
+
 	if (!response.data || !response.data.trim()) {
-		throw new Error("Fetched page is empty.");
+		logger.error("Fetched HTML page content is empty", { url });
+		throw new Error("Fetched HTML page content is empty.");
 	}
 
 	return response.data;

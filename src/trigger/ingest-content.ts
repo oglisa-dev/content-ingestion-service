@@ -22,7 +22,7 @@ export const IngestContentTask = task({
 		const idempotencyKey = await idempotencyKeys.create(payload.contentId);
 
 		try {
-			const extractedContent = await ExtractContentTask.triggerAndWait(
+			const content = await ExtractContentTask.triggerAndWait(
 				{
 					url: URL
 				},
@@ -33,14 +33,14 @@ export const IngestContentTask = task({
 
 			const aiMetadata = await ClassifyContentTask.triggerAndWait(
 				{
-					extractedContent
+					content
 				},
 				{
 					idempotencyKey
 				}
 			).unwrap();
 
-			await updateCompletedContent(payload.contentId, extractedContent, aiMetadata);
+			await updateCompletedContent(payload.contentId, content, aiMetadata);
 
 			return {
 				contentId: payload.contentId,
@@ -74,7 +74,7 @@ export async function markContentAsProcessing(contentId: string): Promise<void> 
 
 export async function updateCompletedContent(
 	contentId: string,
-	extractedContent: ExtractedContent,
+	content: ExtractedContent,
 	aiMetadata: ClassifyContentResponse
 ): Promise<void> {
 	try {
@@ -82,10 +82,10 @@ export async function updateCompletedContent(
 		await supabaseAdmin
 			.from("content")
 			.update({
-				title: extractedContent.title,
-				body_text: extractedContent.bodyText,
-				author: extractedContent.author,
-				publish_date: extractedContent.publishDate,
+				title: content.title,
+				body_text: content.bodyText,
+				author: content.author,
+				publish_date: content.publishDate,
 				summary: aiMetadata.summary,
 				category: aiMetadata.category,
 				confidence_score: aiMetadata.confidenceScore,
